@@ -2,19 +2,21 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
-import { Smartphone, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import { Smartphone, ShieldCheck, ArrowRight, Loader2, Lock, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
     const [phone, setPhone] = useState('');
+    const [otp, setOtp] = useState('');
+    const [step, setStep] = useState('phone'); // phone | otp
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    const handleLogin = async (e) => {
+    const handleRequestOtp = async (e) => {
         e.preventDefault();
         setLoading(true);
         setMessage({ type: '', text: '' });
 
-        // 1. Whitelist Check: Ensure they belong to the Purchasing Team 
+        // 1. Whitelist Check (Security Layer)
         const { data, error } = await supabase
             .from('employees')
             .select('*')
@@ -22,7 +24,7 @@ export default function LoginPage() {
             .single();
 
         if (error || !data || !data.is_active) {
-            setMessage({ type: 'error', text: 'Access Denied. Contact Admin.' });
+            setMessage({ type: 'error', text: 'Access Denied. Unauthorized number.' });
             setLoading(false);
             return;
         }
@@ -33,66 +35,137 @@ export default function LoginPage() {
         });
 
         if (authError) {
-            setMessage({ type: 'error', text: 'Error sending OTP. Try again.' });
+            setMessage({ type: 'error', text: 'Failed to send OTP. Check connectivity.' });
         } else {
-            setMessage({ type: 'success', text: `OTP sent to ${phone}` });
-            // Logic to show OTP input field goes here
+            setStep('otp');
+            setMessage({ type: 'success', text: `Verification code sent to ${phone}` });
         }
         setLoading(false);
     };
 
+    const handleVerifyOtp = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const { data, error } = await supabase.auth.verifyOtp({
+            phone,
+            token: otp,
+            type: 'sms',
+        });
+
+        if (error) {
+            setMessage({ type: 'error', text: 'Invalid OTP code. Please try again.' });
+            setLoading(false);
+        } else {
+            window.location.href = '/dashboard';
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-slate-100">
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-black font-sans selection:bg-black selection:text-white">
             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-sm"
             >
                 {/* Branding */}
-                <div className="text-center mb-10">
-                    <div className="inline-flex p-3 rounded-2xl bg-blue-500/10 mb-4">
-                        <ShieldCheck className="text-blue-500 w-8 h-8" />
+                <div className="text-center mb-12">
+                    <div className="inline-flex p-4 rounded-3xl bg-slate-50 mb-6">
+                        <ShieldCheck className="text-black w-8 h-8" />
                     </div>
-                    <h1 className="text-3xl font-bold tracking-tight">DrSeller Hub</h1>
-                    <p className="text-slate-400 mt-2 text-sm uppercase tracking-widest">
-                        Kerala Expansion Program [cite: 3]
+                    <h1 className="text-4xl font-black tracking-tighter uppercase">DrSeller Hub</h1>
+                    <p className="text-slate-400 mt-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Internal Operations Portal
                     </p>
                 </div>
 
-                {/* Login Form */}
-                <form onSubmit={handleLogin} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase ml-1">
-                            Registered Mobile
-                        </label>
-                        <div className="relative">
-                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
-                            <input
-                                type="tel"
-                                required
-                                placeholder="Enter 10-digit mobile"
-                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-4 pl-12 pr-4 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                            />
-                        </div>
-                    </div>
+                <AnimatePresence mode="wait">
+                    {step === 'phone' ? (
+                        <motion.form
+                            key="phone-step"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            onSubmit={handleRequestOtp}
+                            className="space-y-4"
+                        >
+                            <div className="space-y-1 px-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Registered Mobile
+                                </label>
+                                <div className="relative">
+                                    <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 w-5 h-5" />
+                                    <input
+                                        type="tel"
+                                        required
+                                        placeholder="Enter 10-digit number"
+                                        className="w-full bg-slate-50 border-none rounded-2xl py-5 pl-14 pr-5 focus:ring-2 focus:ring-black transition-all outline-none font-bold text-sm placeholder:text-slate-300 shadow-sm shadow-slate-100"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                    />
+                                </div>
+                            </div>
 
-                    <button
-                        disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20"
-                    >
-                        {loading ? <Loader2 className="animate-spin" /> : <>Get OTP <ArrowRight size={18} /></>}
-                    </button>
-                </form>
+                            <button
+                                disabled={loading}
+                                className="w-full bg-black text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all hover:bg-slate-800 active:scale-95 disabled:bg-slate-100"
+                            >
+                                {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Get OTP <ArrowRight size={16} /></>}
+                            </button>
+                        </motion.form>
+                    ) : (
+                        <motion.form
+                            key="otp-step"
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            onSubmit={handleVerifyOtp}
+                            className="space-y-4"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setStep('phone')}
+                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 hover:text-black transition-colors"
+                            >
+                                <ArrowLeft size={14} /> Back
+                            </button>
 
-                {/* Notifications */}
+                            <div className="space-y-1 px-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Verification Code
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 w-5 h-5" />
+                                    <input
+                                        type="text"
+                                        required
+                                        maxLength={6}
+                                        placeholder="Enter 6-digit OTP"
+                                        className="w-full bg-slate-50 border-none rounded-2xl py-5 pl-14 pr-5 focus:ring-2 focus:ring-black transition-all outline-none font-black tracking-[0.5em] text-center text-lg shadow-sm shadow-slate-100"
+                                        value={otp}
+                                        onChange={(e) => setOtp(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                disabled={loading}
+                                className="w-full bg-black text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 disabled:bg-slate-100 shadow-xl shadow-slate-200"
+                            >
+                                {loading ? <Loader2 className="animate-spin w-5 h-5" /> : "Verify & Enter"}
+                            </button>
+                        </motion.form>
+                    )}
+                </AnimatePresence>
+
+                {/* Status Messages */}
                 <AnimatePresence>
                     {message.text && (
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className={`mt-6 p-4 rounded-2xl text-sm text-center ${message.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+                            className={`mt-8 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center shadow-sm ${message.type === 'error'
+                                ? 'bg-red-50 text-red-500 border border-red-100'
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                 }`}
                         >
                             {message.text}
@@ -100,10 +173,9 @@ export default function LoginPage() {
                     )}
                 </AnimatePresence>
 
-                <div className="mt-10 text-center opacity-30 text-[10px] uppercase tracking-tighter space-y-1">
-                    <p>© 2026 DrSeller Tech • All Rights Reserved</p>
-                    <p>Legal Jurisdiction: Bangalore Courts</p>
-                </div>
+                <footer className="mt-16 text-center opacity-20 text-[8px] font-black uppercase tracking-[0.3em] space-y-2">
+                    <p>© 2026 DrSeller Tech • Bangalore Jurisdiction</p>
+                </footer>
             </motion.div>
         </div>
     );
